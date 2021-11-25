@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Asteroid banger</title>
+	<link rel="stylesheet" href="style.css"> 
+	<link rel="icon" href="img/favicon.png" type="image/png" sizes="32x32">
+</head>
+<body>
+<div class="content">
+	
+<div class="contentWrap">
+    <div class="content">
+        <div class="center">
+
+			<p align = "center"><br> Маневрируйте клавишами стрелок, уклоняйтесь от астероидов, пробел - огонь.
+				<br> Большие астероиды сложнее разрушить и они наносят больше повреждений
+				<br> Собирайте бонусы, дойдите до 50 уровня и победите босса
+			</p>		
+			<canvas align = "center" id="myCanvas" width="1000" height="500"></canvas>
+
+        </div>
+    </div>
+</div>
+	
+</div>
+<div class="footer">
+	Copyright &copy; V. Yagodin
+<div>
+//---------------------------------------------------------------------------------------------------------------------
+	<script type="text/javascript">
+
+		var canvas = document.getElementById("myCanvas");
+		var ctx = canvas.getContext("2d");
+
+		//картинки
+		var ship = new Image();
+		var bossship = new Image();
+		var piu1 = new Image();
+		var piu2 = new Image();
+		var piu3 = new Image();
+		var blast1 = new Image();
+		var blast2 = new Image();
+		var bg = new Image();
+		var asteroid = new Image();
+		var blast = new Image();
+		var bonus_health = new Image();
+		var bonus_weapon = new Image();
+
+		ship.src = "img/ship.png";
+		bossship.src = "img/boss.png";
+		piu1.src = "img/piu1.png";
+		piu2.src = "img/piu2.png";
+		piu3.src = "img/piu3.png";
+		blast1.src = "img/blast1.png";
+		blast2.src = "img/blast2.png";
+		bg.src = "img/space.png";
+		asteroid.src = "img/asteroid.png";
+		blast.src = "img/blast.png";
+		bonus_health.src = "img/bonus_health.png";
+		bonus_weapon.src = "img/bonus_weapon.png";
+
+		//звуки
+		var sfx_piu = new Audio();
+		var sfx_aster = new Audio();
+		var sfx_destroy = new Audio();
+		var sfx_blast1 = new Audio();
+		var sfx_blast2 = new Audio();
+		var sfx_hit = new Audio();
+		var sfx_bonus = new Audio();
+
+		sfx_piu.src = "sfx/piu.mp3";
+		sfx_aster.src = "sfx/aster.mp3";
+		sfx_destroy.src = "sfx/destroy.mp3";
+		sfx_blast1.src = "sfx/blast1.mp3";
+		sfx_blast2.src = "sfx/blast2.mp3";
+		sfx_hit.src = "sfx/hit.mp3";
+		sfx_bonus.src = "sfx/bonus.mp3";
+
+		//общие переменные
+		var score = 0;
+		var level = 1;
+		var asteroids = [];
+		var bullets = [];
+		var bossbullets = [];
+		var bonuses = [];
+
+//---------------------------------------------------------------------------------------------------------------------
+		//блок для игрока
+		let player = {
+			x: 100,
+			y: 230,
+			xSpeed: 0,
+			ySpeed: 0,
+			width: ship.width,
+			height: ship.height,
+			health: 100,
+			weapon: 1
+		};
+	
+		//ловим и обрабатываем события клавиатуры
+		document.addEventListener("keydown", function(event){
+			event.preventDefault();
+			if(event.code == "ArrowUp")
+				moveUp();
+			if(event.code == "ArrowDown")
+				moveDown();
+			if(event.code == "ArrowLeft")
+				moveLeft();
+			if(event.code == "ArrowRight")
+				moveRight();
+			if(event.code == "Space")
+				spawnbullet(player.weapon);
+			if(event.code == "Digit1"){
+				player.weapon = 3;
+				level = 49;
+			}
+		});
+
+		function moveUp() {
+ 			player.ySpeed--;
+		}
+
+		function moveDown() {
+ 			player.ySpeed++;
+		}
+
+		function moveLeft() {
+ 			player.xSpeed--;
+		}
+
+		function moveRight() {
+ 			player.xSpeed++;
+		}
+
+		function damage(dmg){
+			player.health -= dmg;
+			sfx_hit.play();
+			if(player.health <= 0){
+				ctx.drawImage(blast, player.x, player.y);
+				sfx_destroy.play();
+				alert("Корабль уничтожен!");
+ 				location.reload();
+			}
+		}
+
+		//пульки игрока
+		function spawnbullet(weapon){
+			let damage;
+			let speed;
+			let img;
+			
+			if(weapon == 1){
+				damage = 2;
+				speed = 12;
+				img = piu1;
+			}
+			if(weapon == 2){
+				damage = 7;
+				speed = 18;
+				img = piu2;
+			}
+			if(weapon >= 3){
+				damage = 15;
+				speed = 25;
+				img = piu3;
+			}
+
+			bullets.push({
+				damage: damage,
+				speed: speed,
+				img: img,
+				x : player.x + ship.width,
+				y : player.y + parseInt(ship.height / 2) - img.height / 2,
+				width: img.width,
+				height: img.height
+			});
+			sfx_piu.play();
+		}
+
+		//бонусы
+		function spawnbonus(type){
+			if(type == "health"){
+				bonuses.push({
+					img: bonus_health,
+					type: "health",
+					width: bonus_health.width,
+					height: bonus_health.height,
+					x: canvas.width,
+					y: Math.floor(Math.random() * canvas.height) - bonus_health.height,
+					xspeed: -3
+				})
+			}
+
+			if(type == "weapon"){
+				bonuses.push({
+					img: bonus_weapon,
+					type: "weapon",
+					width: bonus_weapon.width,
+					height: bonus_weapon.height,
+					x: canvas.width,
+					y: Math.floor(Math.random() * canvas.height) - bonus_weapon.height,
+					xspeed: -3
+				})
+			}
+		}
+
+
+//---------------------------------------------------------------------------------------------------------------------
+		//блок босса
+		let boss = {
+			img: bossship,
+			x: canvas.width - 30,
+			y: canvas.height / 2 - bossship.height / 2,
+			xSpeed: 0,
+			ySpeed: 0,
+			width: bossship.width,
+			height: bossship.height,
+			health: 5000,
+			enabled: false
+		}
+
+		function spawnbossbullet1(y = 0, yspeed = 0){
+			bossbullets.push({
+				damage: 2,
+				xspeed: -5,
+				yspeed: yspeed,
+				img: blast1,
+				x : boss.x,
+				y : y,
+				width: blast1.width,
+				height: blast1.height
+			});
+			sfx_blast1.play()
+		}
+
+		function spawnbossbullet2(){
+			bossbullets.push({
+				damage: 10,
+				xspeed: -25,
+				yspeed: 0,
+				img: blast2,
+				x : boss.x - blast2.width,
+				y : boss.y + parseInt(boss.height / 2) - blast2.height / 2,
+				width: blast2.width,
+				height: blast2.height
+			});
+			sfx_blast2.play()
+		}
+
+		function bossmoves1(){
+			spawnbossbullet1(boss.y + 90, 3);
+			spawnbossbullet1(boss.y + 190, -3);
+			setTimeout(bossmoves2, 300);
+		}
+
+		function bossmoves2(){
+			spawnbossbullet1(boss.y + 90, 3);
+			spawnbossbullet1(boss.y + 190, -3);
+			setTimeout(bossmoves3, 300);
+		}
+
+		function bossmoves3(){
+			spawnbossbullet1(boss.y + 90, 3);
+			spawnbossbullet1(boss.y + 190, -3);
+			setTimeout(bossmoves4, 300);
+		}
+
+		function bossmoves4(){
+			spawnbossbullet1(boss.y + 90, 3);
+			spawnbossbullet1(boss.y + 190, -3);
+			setTimeout(bossmoves5, 300);
+		}
+
+		function bossmoves5(){
+			spawnbossbullet1(boss.y + 90, 3);
+			spawnbossbullet1(boss.y + 190, -3);
+			setTimeout(bossmoves6, 1000);
+		}
+
+		function bossmoves6(){
+			spawnbossbullet2();
+			setTimeout(bossmoves7, 1000);
+		}
+
+		function bossmoves7(){
+			spawnbossbullet2();
+			if(boss.shoottimeout == 300)
+				boss.shoottimeout = 100;
+			if(boss.shoottimeout == 100)
+				boss.shoottimeout = 300;
+			setTimeout(bossmoves1, 2000);
+		}
+
+		function bossdamage(dmg){
+			boss.health -= dmg;
+			sfx_hit.play();
+			if(boss.health <= 0){
+				ctx.drawImage(blast, boss.x + 300, boss.y + 100);
+				sfx_destroy.play();
+				alert("Ура! Корабль захватчиков уничтожен! Игра пройдена.");
+ 				location.reload();
+			}
+		}
+
+
+//---------------------------------------------------------------------------------------------------------------------
+		//блок для спавна астероидов
+		function getRnd(min, max) {
+  			num = Math.random() * (max - min) + min;
+  			num = num.toFixed(2)
+  			return num;
+		}
+
+		function spawnAsteroid(speed = 0, size = 1, x = canvas.width){
+			asteroids.push({
+				x : x,
+				y : Math.floor(Math.random() * canvas.height) - asteroid.height * size,
+				width: asteroid.width * size,
+				height: asteroid.height * size,
+				health: 10 * size,
+				speed: speed
+			});
+		}
+
+		function spawnAsteroids(){
+			let speed = 1;
+			let sizemorph = 0;
+			let warp = 5000;
+			
+			if(level <= 5)
+				speed = level;
+			else{
+				speed = 5;
+				if(level == 6)
+					sizemorph = 0.2;
+				if(level == 7)
+					sizemorph = 0.4;
+				if(level == 8)
+					sizemorph = 0.6;
+				if(level == 9)
+					sizemorph = 0.8;
+				if(level >= 10)
+					sizemorph = 1;
+			}
+				
+			spawnAsteroid(Math.ceil(Math.random() * speed), (+1) + (+getRnd(-0.9 * sizemorph, sizemorph)));
+
+			if(level <= 4)
+				warp = 5000 - (1000 * level);
+			else
+				warp = 1000;
+			
+			if(level > 20)
+				spawnAsteroid(Math.floor(Math.random() * speed), (+1) + (+getRnd(-0.9 * sizemorph, sizemorph)));
+
+			if(level < 50)
+				setTimeout(spawnAsteroids, warp + Math.floor(Math.random() * 100));
+
+			// вызываем босса
+			if(level >= 50){
+				level = "BOSS";
+				boss.enabled = true;
+				boss.xSpeed = -2;
+				bossmoves1();
+				spawnbonus("health");
+			}
+			
+		}
+
+
+//---------------------------------------------------------------------------------------------------------------------
+		//общие функции
+		function isCollision(objA, objB, offsetX, offsetY){ //столкновения
+			if((objA.x + objA.width - offsetX >= objB.x && objA.x + offsetX <= objB.x + objB.width) && (objA.y + objA.height - offsetY >= objB.y && objA.y + offsetY <= objB.y + objB.height)){
+ 				return true;
+			} else {
+				return false;
+			}
+		}
+
+		//подсчет очков и уровень
+		function scoreplus(){ 
+			score++;
+			if(score % 10 == 0 && level < 50)
+				level++;
+			if(score % 100 == 0)
+				spawnbonus("weapon");
+			if(score % 200 == 0)
+				spawnbonus("health");
+
+		}
+
+//---------------------------------------------------------------------------------------------------------------------
+		//гавная функция, которая все отрисовывает за каждую итерацию
+		function draw(){
+			//рисуем фон, игрока, босса
+			ctx.drawImage(bg, 0, 0);
+			ctx.drawImage(ship, player.x, player.y);
+			if(boss.enabled == true)
+				ctx.drawImage(boss.img, boss.x, boss.y);
+
+			//движение игрока и босса
+			player.x += player.xSpeed;
+			player.y += player.ySpeed;
+			if(boss.enabled == true){
+				boss.x += boss.xSpeed;
+				boss.y += boss.ySpeed;
+				if(boss.x <= 500){
+					boss.xSpeed = 2;
+					if(boss.ySpeed == 0)
+						boss.ySpeed = 1;
+				}
+				if(boss.x >= canvas.width)
+					boss.xSpeed = -2;
+				if(boss.y + boss.img.height >= canvas.height)
+					boss.ySpeed = -1;
+				if(boss.y <= 0)
+					boss.ySpeed = 1;
+			}
+
+			//пули попадают по боссу
+			for(let i = 0; i < bullets.length; i++){
+				if(isCollision(bullets[i], boss, 100, 70)){
+					bossdamage(bullets[i].damage);
+					bullets.splice(i, 1);
+				}
+			}
+				
+			//пули босса попадают по нам
+			for(let i = 0; i < bossbullets.length; i++){
+				if(isCollision(bossbullets[i], player, 0, 0)){
+					damage(bossbullets[i].damage);
+					bossbullets.splice(i, 1);
+				}
+						
+			}
+
+			if(player.x + ship.width < 0 || player.x > canvas.width || player.y + ship.height < 0 || player.y > canvas.height){
+				damage(100);
+			}
+
+			if(isCollision(boss, player, 100, 100))
+				damage(100);
+
+			//в цикле работаем со всеми астероидами, для каждого проверяем события
+			for(let i = 0; i < asteroids.length; i++){
+				ctx.drawImage(asteroid, asteroids[i].x, asteroids[i].y, asteroids[i].width, asteroids[i].height);
+				asteroids[i].x -= asteroids[i].speed;
+
+ 				if(isCollision(player, asteroids[i], 20, 20)){
+ 					damage(1);
+ 					asteroids[i].health -= 1;
+				}
+					
+				for(let j = 0; j < bullets.length; j++){
+					if(isCollision(bullets[j], asteroids[i], 0, 0)){
+						bullets.splice(j, 1);
+						asteroids[i].health -= 2;
+					}
+				}
+
+				if(asteroids[i].health <= 0 || asteroids[i].x + asteroids[i].width < 0){
+					if (asteroids[i].health <= 0)
+						sfx_aster.play();
+					asteroids.splice(i, 1);
+					scoreplus();
+				}
+			}
+
+			// а здесь проходимся по массиву пуль, отрисовываем и уничтожаем вылетевшие за пределы
+			for(let i = 0; i < bullets.length; i++){
+				ctx.drawImage(bullets[i].img, bullets[i].x, bullets[i].y);
+				bullets[i].x += bullets[i].speed;
+				if(bullets[i].x > canvas.width)
+					bullets.splice(i, 1);
+			}
+
+			for(let i = 0; i < bossbullets.length; i++){
+				ctx.drawImage(bossbullets[i].img, bossbullets[i].x, bossbullets[i].y);
+				bossbullets[i].x += bossbullets[i].xspeed;
+				bossbullets[i].y += bossbullets[i].yspeed;
+				if(bossbullets[i].y <= 0 || bossbullets[i].y + bossbullets[i].height >= canvas.height)
+					bossbullets[i].yspeed = bossbullets[i].yspeed * -1;
+				if(bossbullets[i].x + bossbullets[i].width < 0)
+					bossbullets.splice(i, 1);
+			}
+
+			//подбор бонусов
+			for(let i = 0; i < bonuses.length; i++){
+				ctx.drawImage(bonuses[i].img, bonuses[i].x, bonuses[i].y);
+				bonuses[i].x += bonuses[i].xspeed;
+
+				if(isCollision(bonuses[i], player, 0, 0)){
+					if(bonuses[i].type == "health"){
+						player.health += 20;
+						if(player.health > 100)
+							player.health = 100;
+					}
+					if(bonuses[i].type == "weapon")
+						player.weapon += 1;
+					sfx_bonus.play();
+					bonuses.splice(i, 1);
+				}
+			}
+
+			for(let i = 0; i < bonuses.length; i++){
+				if(bonuses[i].x + bonuses[i].width < 0)
+					bonuses.splice(i, 1);
+			}
+
+		//наши показатели статистики
+		ctx.fillStyle = "#FFF";
+ 		ctx.font = "16px Verdana";
+ 		ctx.fillText("Очков: " + score, 10, 30);
+
+ 		ctx.fillStyle = "#FFF";
+ 		ctx.font = "16px Verdana";
+ 		ctx.fillText("Уровень: " + level, 10, 60);
+
+ 		ctx.fillStyle = "#FFF";
+ 		ctx.font = "16px Verdana";
+ 		ctx.fillText("Состояние корабля: " + player.health, canvas.width - 230, 30);
+
+ 		if(boss.enabled == true){
+ 			ctx.fillStyle = "#FF4500";
+ 			ctx.font = "20px Verdana";
+ 			ctx.fillText("Здоровье босса: " + boss.health, canvas.width - 630, 30);
+ 		}
+ 		 		
+		requestAnimationFrame(draw); 
+		}
+
+		//запускаем астероиды и зацикливаем прорисовку
+		spawnAsteroids();
+		draw();
+
+	</script>
+</body>
+</html>
